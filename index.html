@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#E8D0F2">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="description" content="Zack AI for Zack - Muse Spark 1.2">
-<title>Zack AI — for Zack • Muse 1.3</title>
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiWmFjayBBSSIsInNob3J0X25hbWUiOiJaYWNrIEFJIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2Y4ZjhmNyIsInRoZW1lX2NvbG9yIjoiIzExMTExMSIsImljb25zIjpbXX0=">
+<meta name="description" content="Local LLM Harness — model-agnostic BYOK chat & RAG PWA for OpenAI-compatible and Responses API endpoints.">
+<title>Local LLM Harness</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTG9jYWwgTExNIEhhcm5lc3MiLCJzaG9ydF9uYW1lIjoiSGFybmVzcyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiNmOGY4ZjciLCJ0aGVtZV9jb2xvciI6IjExMTExMTEiLCJpY29ucyI6W119">
 <style>
   :root{
     --bg:#f8f8f7;
@@ -210,9 +210,15 @@
   .sheet .body{padding:16px 18px; display:grid; gap:12px}
   .field{display:grid; gap:6px}
   .field label{font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
-  .field input[type="password"], .field input[type="text"]{
+  .field input[type="password"], .field input[type="text"], .field input[type="number"], .field select{
     width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:#fbfbfb;
   }
+  .sheet .body{max-height:min(72vh, 640px); overflow-y:auto}
+  .preset-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:6px}
+  .preset-grid .btn{font-size:12px; padding:8px 8px; justify-content:flex-start}
+  .temp-row{display:flex; align-items:center; gap:10px}
+  .temp-row output{font-size:13px; font-weight:600; min-width:2.5rem}
+  #modelBadgeLabel{max-width:min(280px, 42vw); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .notice{
     font-size:12px; line-height:1.5; background:#fefce8; border:1px solid #fde68a; padding:10px 12px; border-radius:12px;
   }
@@ -237,10 +243,10 @@
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo">Z</div>
+      <div class="logo">⚡</div>
       <div>
-        <h1>Zack AI</h1>
-        <p>for Zack • Muse Spark 1.2</p>
+        <h1>Local LLM Harness</h1>
+        <p>BYOK · Chat · RAG</p>
       </div>
     </div>
     <div class="sidebar-actions">
@@ -266,6 +272,8 @@
       <div class="hint">History & API key are stored only in this browser (localStorage). Works offline as a PWA — Add to Home Screen.</div>
       <div class="row">
         <button class="btn small ghost" id="exportBtn">Export</button>
+        <button class="btn small ghost" id="importBtn">Import</button>
+        <input type="file" id="importInput" accept="application/json" hidden>
         <button class="btn small ghost" id="clearBtn">Clear all</button>
       </div>
     </div>
@@ -275,7 +283,7 @@
     <div class="topbar">
       <div class="topbar-left">
         <button class="icon-btn menu" id="menuBtn" aria-label="Menu">≡</button>
-        <div class="model-badge"><span class="dot"></span> Zack AI <span style="color:var(--muted); font-weight:500">• regular</span></div>
+        <div class="model-badge" id="modelBadge"><span class="dot"></span><span id="modelBadgeLabel">Local LLM Harness</span></div>
         <div class="capabilities" id="capsDesktop">
           <label class="chip"><input type="checkbox" id="toggleImages"> Images</label>
           <label class="chip"><input type="checkbox" id="toggleWeb"> Web browsing</label>
@@ -303,7 +311,7 @@
           <textarea id="input" rows="1" placeholder="Ask anything… (Shift+Enter for new line) — drag files here"></textarea>
           <button class="send" id="sendBtn" aria-label="Send">↑</button>
         </div>
-        <div class="fine">Muse can make mistakes. API key never leaves your device except to api.meta.ai. <a href="#" id="openSettingsLink">Set API key</a></div>
+        <div class="fine">Keys stay in your browser and go only to the endpoint you configure. Models can hallucinate. <a href="#" id="openSettingsLink">Configure provider</a></div>
       </div>
     </div>
   </main>
@@ -313,8 +321,8 @@
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="drawer">
   <div class="brand">
-    <div class="logo">Z</div>
-    <div><h1>Zack AI</h1><p>for Zack • Muse Spark 1.2</p></div>
+    <div class="logo">⚡</div>
+    <div><h1>Local LLM Harness</h1><p>BYOK · Chat · RAG</p></div>
   </div>
   <div class="sidebar-actions">
     <button class="btn primary" id="newChatBtnM">+ New chat</button>
@@ -334,6 +342,7 @@
   <div class="sidebar-foot">
     <div class="row">
       <button class="btn small ghost" id="exportBtnM">Export</button>
+      <button class="btn small ghost" id="importBtnM">Import</button>
       <button class="btn small ghost" id="clearBtnM">Clear all</button>
     </div>
   </div>
@@ -348,30 +357,63 @@
     </header>
     <div class="body">
       <div class="notice">
-        Paste your <code>MODEL_API_KEY</code> from your terminal. It's stored only in <code>localStorage</code> on this device and sent directly to <code>https://api.meta.ai</code>. For CORS issues, run this file via a local server (not <code>file://</code>).
+        BYOK: credentials live in <code>localStorage</code> and are sent only to the endpoint URL below. Serve over HTTP(S) — not <code>file://</code> — to avoid CORS issues.
       </div>
       <div class="field">
-        <label for="apiKey">MODEL_API_KEY</label>
-        <input id="apiKey" type="password" placeholder="Bearer token…" autocomplete="off">
+        <label>Provider preset</label>
+        <div class="preset-grid" id="presetGrid">
+          <button type="button" class="btn small" data-preset="openai">OpenAI</button>
+          <button type="button" class="btn small" data-preset="openrouter">OpenRouter</button>
+          <button type="button" class="btn small" data-preset="vercel">Vercel Gateway</button>
+          <button type="button" class="btn small" data-preset="ollama">Ollama (Local)</button>
+          <button type="button" class="btn small" data-preset="meta">Meta AI Responses</button>
+          <button type="button" class="btn small" data-preset="custom">Custom</button>
+        </div>
       </div>
       <div class="field">
-        <label for="apiUrl">API URL</label>
-        <input id="apiUrl" type="text" value="https://api.meta.ai/v1/responses">
+        <label for="apiKey">API key (optional for localhost)</label>
+        <input id="apiKey" type="password" placeholder="sk-… or leave empty for Ollama" autocomplete="off">
       </div>
       <div class="field">
-        <label for="modelName">Model</label>
-        <select id="modelName" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fbfbfb">
-          <option value="muse-spark-1.3">muse-spark-1.3 — latest (recommended)</option>
-          <option value="muse-spark-1.2">muse-spark-1.2 — regular</option>
+        <label for="apiUrl">Endpoint URL</label>
+        <input id="apiUrl" type="text" placeholder="https://api.openai.com/v1/chat/completions">
+      </div>
+      <div class="field">
+        <label for="apiFormat">API format</label>
+        <select id="apiFormat">
+          <option value="auto">Auto (detect from URL)</option>
+          <option value="chat-completions">Chat Completions</option>
+          <option value="responses">Responses API</option>
         </select>
+        <div class="kicker"><code>/responses</code> → Responses API; otherwise Chat Completions.</div>
+      </div>
+      <div class="field">
+        <label for="modelName">Model ID</label>
+        <input id="modelName" type="text" list="model-suggestions" placeholder="e.g. gpt-4o-mini" autocomplete="off">
+        <datalist id="model-suggestions">
+          <option value="gpt-4o-mini"></option>
+          <option value="gpt-4o"></option>
+          <option value="anthropic/claude-3.5-sonnet"></option>
+          <option value="openai/gpt-4o-mini"></option>
+          <option value="llama3.2"></option>
+          <option value="muse-spark-1.3"></option>
+          <option value="muse-spark-1.2"></option>
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="temperature">Temperature</label>
+        <div class="temp-row">
+          <input id="temperature" type="range" min="0" max="1.5" step="0.1" value="0.4">
+          <output id="temperatureOut">0.4</output>
+        </div>
       </div>
       <div class="field">
         <label for="firecrawlKey">Firecrawl API Key (for browsing + market data)</label>
         <input id="firecrawlKey" type="password" placeholder="fc-...">
       </div>
       <div class="field">
-        <label for="systemPrompt">System Prompt — Zack AI personality</label>
-        <textarea id="systemPrompt" rows="3" placeholder="You are Zack AI — concise analyst for Zack..." style="width:100%; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fbfbfb; resize:vertical"></textarea>
+        <label for="systemPrompt">System Prompt</label>
+        <textarea id="systemPrompt" rows="3" placeholder="You are a concise, thorough research assistant…" style="width:100%; padding:10px; border:1px solid var(--line); border-radius:12px; background:#fbfbfb; resize:vertical"></textarea>
         <div class="kicker">Sent with every message as system. Keep it concise.</div>
       </div>
       <div class="field">
@@ -396,7 +438,22 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import {
+  DEFAULT_SYSTEM_PROMPT,
+  PROVIDER_PRESETS,
+  resolveApiFormat,
+  requiresApiKey,
+  buildAuthHeaders,
+  buildChatMessages,
+  buildResponsesInput,
+  buildRequestPayload,
+  parseAssistantResponse,
+  formatAssistantMeta,
+  inferProviderLabel,
+  chunkText,
+} from './lib/harness-api.mjs';
+
 const LS_KEY = 'muse12_chats_v1';
 const LS_SETTINGS = 'muse12_settings_v1';
 const LS_CURRENT = 'muse12_current_v1';
@@ -431,28 +488,118 @@ function loadSettings(){
     const s = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null');
     return {
       apiKey: s?.apiKey || '',
-      apiUrl: s?.apiUrl || 'https://api.meta.ai/v1/responses',
-      model: s?.model || 'muse-spark-1.3',
+      apiUrl: s?.apiUrl || PROVIDER_PRESETS.meta.apiUrl,
+      apiFormat: s?.apiFormat || 'auto',
+      model: s?.model || PROVIDER_PRESETS.meta.model,
+      temperature: typeof s?.temperature === 'number' ? s.temperature : 0.4,
       firecrawlKey: s?.firecrawlKey || '',
-      systemPrompt: s?.systemPrompt || 'You are Zack AI — concise analyst for Zack. Use all resources comprehensively: Projects RAG, attachments, and Firecrawl live browsing/market data when relevant. Be comprehensive, cover edge cases, but keep language clear and non-technical. Zack is not a dev — explain simply, no jargon, smooth and helpful.',
-      memory: Array.isArray(s?.memory) ? s.memory : [
-        'Use all available resources comprehensively — Projects, attachments, and Firecrawl browsing/market data — every answer should leverage what is available.',
-        'Be comprehensive: cover edge cases, alternatives, and next steps, but keep it concise and analyst-clear.',
-        'Zack is not a dev — explain without jargon, give plain steps and why it matters, keep performance smooth.'
-      ],
+      systemPrompt: s?.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+      memory: Array.isArray(s?.memory) ? s.memory : [],
       useMemory: s?.useMemory !== false
     };
-  }catch{ return {apiKey:'', apiUrl:'https://api.meta.ai/v1/responses', model:'muse-spark-1.3', firecrawlKey:'', systemPrompt:'You are Zack AI — concise analyst for Zack. Use all resources comprehensively: Projects RAG, attachments, and Firecrawl live browsing/market data when relevant. Be comprehensive, cover edge cases, but keep language clear and non-technical. Zack is not a dev — explain simply, no jargon, smooth and helpful.', memory:[], useMemory:true} }
+  }catch{
+    return {
+      apiKey:'',
+      apiUrl: PROVIDER_PRESETS.meta.apiUrl,
+      apiFormat:'auto',
+      model: PROVIDER_PRESETS.meta.model,
+      temperature: 0.4,
+      firecrawlKey:'',
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
+      memory:[],
+      useMemory:true
+    };
+  }
+}
+function readSettingsFromForm(){
+  settings.apiKey = $('#apiKey').value.trim();
+  settings.apiUrl = $('#apiUrl').value.trim() || PROVIDER_PRESETS.meta.apiUrl;
+  settings.apiFormat = $('#apiFormat').value || 'auto';
+  settings.model = $('#modelName').value.trim() || PROVIDER_PRESETS.meta.model;
+  settings.temperature = parseFloat($('#temperature').value) || 0.4;
+  settings.firecrawlKey = $('#firecrawlKey').value.trim();
+  settings.systemPrompt = $('#systemPrompt').value.trim();
+  settings.useMemory = $('#useMemoryToggle').checked;
+}
+function updateModelBadge(){
+  const label = $('#modelBadgeLabel');
+  if(!label) return;
+  const provider = inferProviderLabel(settings.apiUrl);
+  const fmt = resolveApiFormat(settings.apiUrl, settings.apiFormat);
+  label.textContent = `${provider} · ${settings.model} · ${fmt}`;
+  label.title = settings.apiUrl;
+}
+function applyPreset(id){
+  const p = PROVIDER_PRESETS[id];
+  if(!p || id === 'custom') return;
+  settings.apiUrl = p.apiUrl;
+  settings.apiFormat = p.apiFormat === 'responses' ? 'responses' : (p.apiFormat === 'chat-completions' ? 'chat-completions' : 'auto');
+  settings.model = p.model;
+  saveSettings();
+  $('#settingsStatus').textContent = `Preset: ${p.label}`;
 }
 function saveSettings(){
   localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
   $('#apiKey').value = settings.apiKey;
   $('#apiUrl').value = settings.apiUrl;
+  $('#apiFormat').value = settings.apiFormat || 'auto';
   $('#modelName').value = settings.model;
+  $('#temperature').value = String(settings.temperature ?? 0.4);
+  $('#temperatureOut').textContent = String(settings.temperature ?? 0.4);
   $('#firecrawlKey').value = settings.firecrawlKey || '';
   $('#systemPrompt').value = settings.systemPrompt || '';
   renderMemoryList();
   $('#useMemoryToggle').checked = settings.useMemory !== false;
+  updateModelBadge();
+}
+function buildSystemParts(raw){
+  const sysParts = [];
+  if(settings.systemPrompt) sysParts.push(settings.systemPrompt);
+  if(settings.useMemory && settings.memory?.length){
+    const q = raw.toLowerCase().split(/\s+/).filter(w=>w.length>3);
+    const scored = settings.memory.map(m=>{
+      const s = q.filter(w=> m.toLowerCase().includes(w)).length;
+      return {m, s};
+    }).sort((a,b)=>b.s-a.s).filter(x=>x.s>0).slice(0,3);
+    const mems = scored.length ? scored.map(x=>x.m) : settings.memory.slice(0,2);
+    if(mems.length) sysParts.push('[Memory context]\n' + mems.map(m=>'- '+m).join('\n'));
+  }
+  return sysParts;
+}
+function buildTurnsForApi(chat, enrichedLatestUser){
+  const msgs = chat.messages.filter(m=>m.text!=='…').slice(-12);
+  return msgs.map((m, i, arr)=>{
+    const isLastUser = m.role==='user' && i === arr.length - 1;
+    const text = isLastUser && enrichedLatestUser ? enrichedLatestUser : m.text;
+    return { role: m.role, text };
+  });
+}
+async function callModelApi(turns, systemParts){
+  const format = resolveApiFormat(settings.apiUrl, settings.apiFormat);
+  const messages = buildChatMessages(turns, systemParts);
+  const input = buildResponsesInput(turns, systemParts);
+  const body = buildRequestPayload({
+    format,
+    model: settings.model,
+    temperature: settings.temperature ?? 0.4,
+    messages,
+    input,
+  });
+  const headers = buildAuthHeaders(settings.apiUrl, settings.apiKey);
+  const t0 = performance.now();
+  const res = await fetch(settings.apiUrl, {
+    method:'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const latencyMs = performance.now() - t0;
+  const data = await res.json().catch(()=>null);
+  if(!res.ok){
+    const errText = data ? JSON.stringify(data,null,2) : res.statusText;
+    throw new Error(errText);
+  }
+  const { text, usage } = parseAssistantResponse(data);
+  return { text: text || '(empty response)', usage, latencyMs, format };
 }
 function loadChats(){
   try{
@@ -534,12 +681,12 @@ function renderMessages(){
     empty.className='empty';
     empty.innerHTML=`
       <h2>What's on your mind?</h2>
-      <p>Chat with <strong>Zack AI</strong> <span style="color:var(--muted)">— Muse Spark 1.2 inside</span> from your phone or desktop. Your history stays on this device. Use the toggles for Images, Web browsing, and GitHub — they add smart instructions to the model.</p>
+      <p><strong>Local LLM Harness</strong> — route any OpenAI-compatible or Responses API endpoint with project RAG, attachments, and optional Firecrawl browsing. Data stays on this device.</p>
       <div class="suggestions">
-        <button class="suggestion" data-prompt="Write a script that randomly generates a haiku about Meta, and explain your reasoning behind what script language you would choose."><strong>Haiku script</strong>Generate a random haiku about Meta + explain language choice</button>
-        <button class="suggestion" data-prompt="Create an image of a minimal poster for Muse 1.3 launch — describe the prompt you'd use for an image model."><strong>Image idea</strong>Draft an image prompt for a launch poster</button>
-        <button class="suggestion" data-prompt="Browse the web and summarize the latest news about Meta AI today. If you can't browse, explain what you'd search."><strong>Web browsing</strong>Summarize latest Meta AI news</button>
-        <button class="suggestion" data-prompt="Connect to GitHub: outline how you'd create a repo, commit this chat UI, and open a PR. Show the git commands."><strong>GitHub</strong>Scaffold a repo &amp; PR workflow</button>
+        <button class="suggestion" data-prompt="Review a typical three-tier web app architecture (client, API, database). List strengths, failure modes, and two concrete improvements with trade-offs."><strong>Architecture review</strong>Strengths, risks, and pragmatic improvements</button>
+        <button class="suggestion" data-prompt="Given project files attached in this harness, synthesize a brief executive summary, key themes, and open questions grounded only in the provided excerpts."><strong>Document RAG synthesis</strong>Summarize themes from project files</button>
+        <button class="suggestion" data-prompt="I have a users table and orders table. Propose SQL to compute monthly revenue, top customers, and cohort retention. Explain each query and index suggestions."><strong>SQL &amp; data analysis</strong>Queries, indexes, and interpretation</button>
+        <button class="suggestion" data-prompt="Compare how temperature 0.2 vs 0.9 would affect answers for a factual extraction task vs creative brainstorming. Draft two short system prompts optimized for each."><strong>Prompt &amp; model comparison</strong>Temperature and system prompt design</button>
       </div>
     `;
     empty.querySelectorAll('[data-prompt]').forEach(b=>{
@@ -553,7 +700,7 @@ function renderMessages(){
     row.className='bubble-row';
     const av=document.createElement('div');
     av.className='avatar' + (m.role==='user'?' user':'');
-    av.textContent = m.role==='user'?'You':'M';
+    av.textContent = m.role==='user'?'You':'AI';
     const bubble=document.createElement('div');
     bubble.className='bubble ' + (m.role==='user'?'user':'assistant');
     if(m.role==='user'){
@@ -608,38 +755,11 @@ function buildInputPayload(userText){
   return text;
 }
 
-function extractAssistantText(data){
-  // Try api.meta.ai /v1/responses shape
-  // Common shapes: {output:[{content:[{text}]}]} or {output_text} or {choices[0].message.content}
-  try{
-    if(typeof data.output_text === 'string' && data.output_text) return data.output_text;
-    if(data.output && Array.isArray(data.output)){
-      const parts=[];
-      for(const item of data.output){
-        const c = item.content || item.contents || [];
-        for(const p of c){
-          if(typeof p.text === 'string') parts.push(p.text);
-          else if(p.type==='output_text' && p.text) parts.push(p.text);
-        }
-        if(typeof item.text === 'string') parts.push(item.text);
-      }
-      if(parts.length) return parts.join('\n\n');
-    }
-    if(data.response?.output_text) return data.response.output_text;
-    if(data.choices?.[0]?.message?.content) {
-      const cc=data.choices[0].message.content;
-      return typeof cc==='string'? cc : JSON.stringify(cc);
-    }
-    if(typeof data.text === 'string') return data.text;
-    return JSON.stringify(data, null, 2);
-  }catch{ return JSON.stringify(data, null, 2); }
-}
-
 async function doSend(){
   const raw = inputEl.value.trim();
   if(!raw || sending) return;
-  if(!settings.apiKey){
-    openModal(); $('#settingsStatus').textContent='Add your API key first.';
+  if(requiresApiKey(settings.apiUrl, settings.apiKey)){
+    openModal(); $('#settingsStatus').textContent='Add an API key for this endpoint (not required for localhost).';
     return;
   }
   const chat = ensureChat();
@@ -680,57 +800,18 @@ async function doSend(){
   let enriched = buildInputPayload(raw);
   if(firecrawlCtx) enriched += firecrawlCtx;
 
-  // Build history for API - only last 12 turns + current
-  // Assistant messages must use output_text, user messages use input_text
-  const historyForApi = chat.messages.filter(m=>m.text!=='…').slice(-12).map(m=>{
-    const isUser = m.role==='user';
-    const txt = isUser ? (m===chat.messages[chat.messages.length-2] ? enriched : m.text) : m.text;
-    return {
-      role: m.role,
-      content: [{type: isUser ? 'input_text' : 'output_text', text: txt}]
-    };
-  });
-  // But per your curl, API expects "input" array with role/content. Use last user enriched, previous as is.
-  // Simpler: send full history as input (works for responses API)
-  // Inject system prompt + relevant memory as system message at start
-  let finalInput = historyForApi;
-  const sysParts = [];
-  if(settings.systemPrompt) sysParts.push(settings.systemPrompt);
-  if(settings.useMemory && settings.memory && settings.memory.length){
-    // Simple RAG for memory: pick memories matching query keywords
-    const q = raw.toLowerCase().split(/\s+/).filter(w=>w.length>3);
-    const scored = settings.memory.map(m=>{
-      const s = q.filter(w=> m.toLowerCase().includes(w)).length;
-      return {m, s};
-    }).sort((a,b)=>b.s-a.s).filter(x=>x.s>0).slice(0,3);
-    const mems = scored.length ? scored.map(x=>x.m) : settings.memory.slice(0,2);
-    if(mems.length) sysParts.push('[Memory for Zack]\n' + mems.map(m=>'- '+m).join('\n'));
-  }
-  if(sysParts.length){
-    finalInput = [{role:'system', content:[{type:'input_text', text: sysParts.join('\n\n')} ]}, ...historyForApi];
-  }
-  const body = {
-    model: settings.model,
-    input: finalInput,
-    stream: false
-  };
+  const sysParts = buildSystemParts(raw);
+  const turns = buildTurnsForApi(chat, enriched);
 
   try{
-    const res = await fetch(settings.apiUrl, {
-      method:'POST',
-      headers:{
-        'Authorization': 'Bearer ' + settings.apiKey,
-        'Content-Type':'application/json'
-      },
-      body: JSON.stringify(body)
+    const { text: txt, usage, latencyMs } = await callModelApi(turns, sysParts);
+    const meta = formatAssistantMeta({
+      model: settings.model,
+      latencyMs,
+      usage,
+      providerLabel: inferProviderLabel(settings.apiUrl),
     });
-    const data = await res.json().catch(()=>null);
-    if(!res.ok){
-      const errText = data ? JSON.stringify(data,null,2) : res.statusText;
-      throw new Error(errText);
-    }
-    const txt = extractAssistantText(data) || '(empty response)';
-    chat.messages[chat.messages.length-1] = {role:'assistant', text: txt, meta: settings.model + ' • ' + new Date().toLocaleTimeString()};
+    chat.messages[chat.messages.length-1] = {role:'assistant', text: txt, meta };
   }catch(e){
     const msg = e.message || String(e);
     const corsHint = msg.includes('Failed to fetch') ? '\n\nTip: If you opened this file via file://, CORS will fail. Run:  python3 -m http.server 8000  inside the folder, then open http://localhost:8000  — or deploy to any static host.' : '';
@@ -752,15 +833,19 @@ $('#closeModal').addEventListener('click', closeModal);
 $('#openSettingsLink').addEventListener('click', (e)=>{e.preventDefault(); openModal();});
 modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
 $('#saveSettings').addEventListener('click', ()=>{
-  settings.apiKey = $('#apiKey').value.trim();
-  settings.apiUrl = $('#apiUrl').value.trim() || 'https://api.meta.ai/v1/responses';
-  settings.model = $('#modelName').value.trim() || 'muse-spark-1.3';
-  settings.firecrawlKey = $('#firecrawlKey').value.trim();
-  settings.systemPrompt = $('#systemPrompt').value.trim();
-  settings.useMemory = $('#useMemoryToggle').checked;
+  readSettingsFromForm();
   localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+  updateModelBadge();
   $('#settingsStatus').textContent='Saved ✓';
   setTimeout(closeModal, 600);
+});
+$('#presetGrid')?.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-preset]');
+  if(!btn) return;
+  applyPreset(btn.dataset.preset);
+});
+$('#temperature')?.addEventListener('input', e=>{
+  $('#temperatureOut').textContent = e.target.value;
 });
 function renderMemoryList(){
   const c=$('#memoryList'); if(!c) return; c.innerHTML='';
@@ -779,22 +864,15 @@ $('#memoryInput')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preve
 $('#useMemoryToggle')?.addEventListener('change', e=>{ settings.useMemory=e.target.checked; localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); });
 
 $('#testBtn').addEventListener('click', async ()=>{
-  settings.apiKey = $('#apiKey').value.trim();
-  settings.apiUrl = $('#apiUrl').value.trim();
-  settings.model = $('#modelName').value.trim();
-  settings.firecrawlKey = $('#firecrawlKey').value.trim();
-  settings.systemPrompt = $('#systemPrompt').value.trim();
-  settings.useMemory = $('#useMemoryToggle').checked;
+  readSettingsFromForm();
+  if(requiresApiKey(settings.apiUrl, settings.apiKey)){
+    $('#settingsStatus').textContent='API key required for remote endpoints.';
+    return;
+  }
   $('#settingsStatus').textContent='Testing…';
   try{
-    const res = await fetch(settings.apiUrl, {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+settings.apiKey,'Content-Type':'application/json'},
-      body: JSON.stringify({model: settings.model, input:[{role:'user', content:[{type:'input_text', text:'ping'}]}], stream:false})
-    });
-    const j=await res.json().catch(()=>null);
-    if(res.ok) $('#settingsStatus').textContent='Connected ✓ — ' + (j? 'got response' : 'ok');
-    else $('#settingsStatus').textContent='Error: ' + JSON.stringify(j||res.statusText).slice(0,400);
+    const { text, latencyMs } = await callModelApi([{role:'user', text:'ping'}], []);
+  $('#settingsStatus').textContent = 'Connected ✓ · ' + Math.round(latencyMs) + 'ms · ' + String(text).slice(0,80);
   }catch(e){ $('#settingsStatus').textContent='Failed: '+e.message; }
 });
 
@@ -815,11 +893,35 @@ function clearAll(){
 $('#clearBtn').addEventListener('click', clearAll);
 $('#clearBtnM').addEventListener('click', clearAll);
 function doExport(){
-  const blob=new Blob([JSON.stringify({settings:{...settings, apiKey:'***'}, chats},null,2)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='muse-1.3-chats.json'; a.click();
+  const blob=new Blob([JSON.stringify({version:2, exportedAt:new Date().toISOString(), settings:{...settings, apiKey:'***'}, chats, projects},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='llm-harness-export.json'; a.click();
+}
+function doImport(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(String(r.result));
+      if(Array.isArray(data.chats)) { chats=data.chats; persistChats(); }
+      if(Array.isArray(data.projects)) { projects=data.projects; saveProjects(); renderProjects(); }
+      if(data.settings && typeof data.settings==='object'){
+        const merged={...settings, ...data.settings};
+        if(merged.apiKey==='***') delete merged.apiKey;
+        settings=merged;
+        localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+      }
+      if(!currentId && chats.length) currentId=chats[0].id;
+      renderAll();
+      alert('Import complete.');
+    }catch(e){ alert('Import failed: '+e.message); }
+  };
+  r.readAsText(file);
 }
 $('#exportBtn').addEventListener('click', doExport);
 $('#exportBtnM').addEventListener('click', doExport);
+$('#importBtn')?.addEventListener('click', ()=>$('#importInput').click());
+$('#importBtnM')?.addEventListener('click', ()=>$('#importInput').click());
+$('#importInput')?.addEventListener('change', e=>{ doImport(e.target.files?.[0]); e.target.value=''; });
 
 // Init
 saveSettings();
@@ -958,14 +1060,21 @@ async function getFirecrawlContext(query){
 function getRAGContext(query){
   const pr=getActiveProject(); if(!pr || pr.files.length===0) return '';
   const q=(query||'').toLowerCase().split(/\s+/).filter(w=>w.length>3);
-  const scored = pr.files.map(f=>{
-    const txt=(f.text||'').toLowerCase();
-    let score=0; q.forEach(w=>{ if(txt.includes(w)) score+=1; });
-    // fallback: if no keyword match, include first file snippet lightly
-    return {f, score, snippet: (f.text||'').slice(0, 1200)};
-  }).sort((a,b)=>b.score-a.score).filter(x=>x.score>0 || x.snippet).slice(0,3);
-  if(scored.length===0) return '';
-  return '\n\n[Project: '+pr.name+' — relevant files for RAG]\n' + scored.map(s=>`--- ${s.f.name} ---\n${s.snippet.slice(0,1000)}`).join('\n\n');
+  const chunks=[];
+  for(const f of pr.files){
+    let pieces = chunkText(f.text||'', 800);
+    if(!pieces.length && (f.text||'').length) pieces = [(f.text||'').slice(0,800)];
+    pieces.forEach((snippet, idx)=>{
+      const txt=snippet.toLowerCase();
+      let score=0; q.forEach(w=>{ if(txt.includes(w)) score+=1; });
+      chunks.push({f, score, snippet, idx});
+    });
+  }
+  const scored = chunks.sort((a,b)=>b.score-a.score).filter(x=>x.score>0).slice(0,4);
+  const fallback = chunks.slice(0,2);
+  const picked = scored.length ? scored : fallback;
+  if(!picked.length) return '';
+  return '\n\n[Project: '+pr.name+' — RAG chunks]\n' + picked.map(s=>`--- ${s.f.name} #${s.idx+1} ---\n${s.snippet.slice(0,900)}`).join('\n\n');
 }
 
 // Wire up
