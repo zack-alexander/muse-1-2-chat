@@ -1,19 +1,55 @@
-# Muse Chat
+# Local LLM Harness
 
-Local-first, single-file chat PWA for [Muse](https://meta.ai) models with bring-your-own-key (BYOK) API calls from the browser.
+**Zero-dependency, local-first BYOK chat & RAG harness** — a single-page PWA that talks to OpenAI Chat Completions, OpenRouter, Vercel AI Gateway, Ollama/LM Studio, Meta AI Responses API, or any compatible endpoint you configure.
+
+> Optional: rename this repository in GitHub **Settings → General** to `local-llm-harness` when you want a clearer public slug.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI["Browser UI\n(index.html)"]
+  LS[("localStorage\nchats · projects · keys")]
+  RAG["Project RAG\nchunking + keywords"]
+  FC["Firecrawl\n(optional web)"]
+  API["Your endpoint\nChat Completions or Responses"]
+
+  UI <--> LS
+  UI --> RAG
+  UI --> FC
+  UI -->|HTTPS POST BYOK| API
+  FC --> UI
+  RAG --> UI
+```
 
 ## Key features
 
-- **Local-first history** — Chats and settings live in `localStorage` on your device.
-- **BYOK** — Client-side requests to `https://api.meta.ai/v1/responses` with your `MODEL_API_KEY`.
-- **Project RAG** — Attach project files (text, markdown, PDF snippets) and run keyword-based retrieval in every chat in a project.
-- **Message attachments** — Drag-and-drop or pick files per message.
-- **Optional web browsing** — Firecrawl search/scrape when the Web toggle is on (requires a Firecrawl API key).
-- **Installable PWA** — Add to Home Screen on mobile or desktop; works offline as a shell after load.
+- **Multi-provider BYOK** — Provider presets + custom URL; API key optional on `localhost` / `127.0.0.1` (Ollama, LM Studio, vLLM).
+- **Dual protocol** — Auto-detect or force **Chat Completions** (`messages`, `temperature`) or **Responses API** (`input` blocks).
+- **Any model ID** — Free-form model field with suggestions (not locked to one vendor).
+- **Local-first** — Chats, settings, projects, and memory in `localStorage` (existing project keys preserved).
+- **RAG** — Per-project files with client-side chunking; memory keyword RAG; per-message attachments.
+- **Observability** — Assistant footers show latency (ms) and token usage when the API returns `usage`.
+- **Export / import** — JSON backup including chats, settings, and projects.
+- **PWA** — Installable; optional Firecrawl when “Web browsing” is enabled.
+
+## Provider compatibility
+
+| Provider | Endpoint (preset) | API format | API key |
+|----------|-------------------|------------|---------|
+| OpenAI | `https://api.openai.com/v1/chat/completions` | Chat Completions | Required |
+| OpenRouter | `https://openrouter.ai/api/v1/chat/completions` | Chat Completions | Required |
+| Vercel AI Gateway | `https://ai-gateway.vercel.sh/v1/chat/completions` | Chat Completions | Required |
+| Ollama (local) | `http://localhost:11434/v1/chat/completions` | Chat Completions | Optional |
+| LM Studio / vLLM | `http://127.0.0.1:…/v1/chat/completions` | Chat Completions | Optional |
+| Meta AI | `https://api.meta.ai/v1/responses` | Responses | Required |
+| Custom | Your URL | Auto or manual | Depends on host |
+
+Use **Settings → API format → Auto** unless you need to override detection (`/responses` → Responses API).
 
 ## Quickstart
 
-### Local development
+### Local
 
 ```bash
 git clone https://github.com/zman77-boop/muse-1-2-chat.git
@@ -21,28 +57,33 @@ cd muse-1-2-chat
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000`. Do not open `index.html` via `file://` — the browser will block cross-origin calls to `api.meta.ai`.
+Open `http://localhost:8000` (not `file://`). Pick a **provider preset**, set model + key if needed, **Save**, then **Test connection**.
 
-1. Open **API settings**, paste your `MODEL_API_KEY`, and **Save**.
-2. Optional: add a Firecrawl key for web browsing; create a **Project** and add reference files.
-
-### Deploy on Vercel
+### Vercel
 
 ```bash
 npx vercel --prod
 ```
 
-Framework: **Other** / static. Output directory: `.` (`index.html` + `vercel.json`). `vercel.json` rewrites all routes to `index.html`.
+Static output: `.` (`index.html`, `lib/`, `vercel.json`).
 
-## Configuration & security
+### Tests (CI)
 
-| Setting | Storage | Sent to |
-|--------|---------|---------|
-| `MODEL_API_KEY` | `localStorage` | `api.meta.ai` only |
-| Firecrawl key | `localStorage` | `api.firecrawl.dev` only |
-| Chats, projects, memory | `localStorage` | Not transmitted (except as prompt context to Muse when you send a message) |
+```bash
+node --test tests/harness.test.mjs
+```
 
-Keys never pass through this repository or a custom backend — only your browser and the endpoints you configure.
+GitHub Actions runs this on Node 22 (see `.github/workflows/ci.yml`).
+
+## Privacy & security
+
+| Data | Stored | Transmitted to |
+|------|--------|----------------|
+| API keys | `localStorage` | Only the endpoint URL you configure |
+| Firecrawl key | `localStorage` | `api.firecrawl.dev` when browsing is on |
+| Chats / projects / memory | `localStorage` | Included in prompts you send to your LLM endpoint |
+
+No backend in this repo — the browser calls providers directly (subject to each provider’s CORS policy).
 
 ## License
 
